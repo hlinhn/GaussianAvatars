@@ -22,7 +22,7 @@ from scipy.interpolate import interp1d
 import matplotlib
 
 from utils.viewer_utils import Mini3DViewer, Mini3DViewerConfig
-from gaussian_renderer import GaussianModel, FlameGaussianModel
+from gaussian_renderer import GaussianModel, FlameGaussianModel, ManoGaussianModel
 from gaussian_renderer import render
 from mesh_renderer import NVDiffRenderer
 
@@ -94,9 +94,9 @@ class LocalViewer(Mini3DViewer):
 
     def init_gaussians(self):
         # load gaussians
-        motion_path = Path(self.cfg.point_path).parent / "flame_param.npz"
+        motion_path = Path(self.cfg.point_path).parent / "mano_param.npz"
         if motion_path.exists():
-            self.gaussians = FlameGaussianModel(self.cfg.sh_degree)
+            self.gaussians = ManoGaussianModel(self.cfg.sh_degree)
         else:
             self.gaussians = GaussianModel(self.cfg.sh_degree)
 

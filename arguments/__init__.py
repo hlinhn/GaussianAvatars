@@ -54,7 +54,8 @@ class ModelParams(ParamGroup):
         self._resolution = -1
         self._white_background = False
         self.data_device = "cuda"
-        self.eval = False
+        self.eval = True
+        self.is_rhand = False
         self.bind_to_mesh = False
         self.disable_flame_static_offset = False
         self.not_finetune_flame_params = False
@@ -76,7 +77,7 @@ class PipelineParams(ParamGroup):
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
         # 3D Gaussians
-        self.iterations = 600_000  # 30_000 (original)
+        self.iterations = 5 #600_000  # 30_000 (original)
         self.position_lr_init = 0.005  # (scaled up according to mean triangle scale)  #0.00016 (original)
         self.position_lr_final = 0.00005  # (scaled up according to mean triangle scale) # 0.0000016 (original)
         self.position_lr_delay_mult = 0.01

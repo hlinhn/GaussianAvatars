@@ -26,7 +26,7 @@ from gaussian_renderer import render
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
-from gaussian_renderer import GaussianModel, FlameGaussianModel
+from gaussian_renderer import GaussianModel, FlameGaussianModel, ManoGaussianModel
 from mesh_renderer import NVDiffRenderer
 
 
@@ -105,7 +105,7 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
     with torch.no_grad():
         if dataset.bind_to_mesh:
             # gaussians = FlameGaussianModel(dataset.sh_degree, dataset.disable_flame_static_offset)
-            gaussians = FlameGaussianModel(dataset.sh_degree)
+            gaussians = ManoGaussianModel(dataset.sh_degree)
         else:
             gaussians = GaussianModel(dataset.sh_degree)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)

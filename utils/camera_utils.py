@@ -50,6 +50,7 @@ def loadCam(args, id, cam_info, resolution_scale):
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):
     camera_list = []
+    print(len(cam_infos))
 
     for id, c in tqdm(enumerate(cam_infos), total=len(cam_infos)):
         if args.select_camera_id != -1 and c.camera_id is not None:

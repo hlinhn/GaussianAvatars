@@ -18,7 +18,7 @@ from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
 from mesh_renderer import NVDiffRenderer
 import sys
-from scene import Scene, GaussianModel, FlameGaussianModel
+from scene import Scene, GaussianModel, FlameGaussianModel, ManoGaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
@@ -36,7 +36,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     if dataset.bind_to_mesh:
-        gaussians = FlameGaussianModel(dataset.sh_degree, dataset.disable_flame_static_offset, dataset.not_finetune_flame_params)
+        # gaussians = FlameGaussianModel(dataset.sh_degree, dataset.disable_flame_static_offset, dataset.not_finetune_flame_params)
+        gaussians = ManoGaussianModel(dataset.sh_degree, dataset.is_rhand)
         mesh_renderer = NVDiffRenderer()
     else:
         gaussians = GaussianModel(dataset.sh_degree)
