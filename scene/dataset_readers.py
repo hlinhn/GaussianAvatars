@@ -297,7 +297,9 @@ def readManoMeshes(path, mesh_file):
 
 
 def readManoCameras(path, mesh_file, camera_file, white_background=False):
-    source_folder = "/home/halinh/external_data/InterHand2.6M_30fps_batch1/images/test/Capture0/ROM03_LT_No_Occlusion/"
+    # source_folder = "/home/halinh/external_data/InterHand2.6M_30fps_batch1/images/test/Capture0/ROM03_LT_No_Occlusion/"
+    source_folder = os.path.join(f"{os.getcwd()}", "..", "..", "gaussian_test", 
+                                 "ROM03_LT_No_Occlusion")
     idx_to_image = {}
     camera_infos = {}
     with open(os.path.join(path, mesh_file)) as json_file:

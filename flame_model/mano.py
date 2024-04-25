@@ -38,7 +38,8 @@ from .mano_utils import Struct, to_np, to_tensor
 from .mano_utils import Mesh, points2sphere, colors
 from .mano_utils import TIP_IDS
 
-MANO_MODEL_PATH = "flame_model/assets/mano"
+MANO_MODEL_PATH = os.path.join(f"{os.getcwd()}", "flame_model", "assets", "mano")
+# MANO_MODEL_PATH = os.path.join("C:", "Users", "Admin", "Downloads", "mano_v1_2", "models")
 
 ModelOutput = namedtuple('ModelOutput',
                          ['vertices', 'joints', 'full_pose', 'betas',
