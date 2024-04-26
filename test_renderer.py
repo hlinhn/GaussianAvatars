@@ -68,14 +68,14 @@ def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, open
 
 
 class OrbitCamera:
-    def __init__(self, W, H, r=2, fovy=60, near=0.01, far=100):
+    def __init__(self, W, H, r=2, fovy=60, near=0.1, far=10):
         self.W = W
         self.H = H
         self.radius = r  # camera distance from center
         self.fovy = np.deg2rad(fovy)  # deg 2 rad
         self.near = near
         self.far = far
-        self.center = np.array([0, 0, 0], dtype=np.float32)  # look at this point
+        self.center = np.array([0.1, 0.1, 1], dtype=np.float32)  # look at this point
         self.rot = R.from_matrix(np.eye(3))
         self.up = np.array([0, 1, 0], dtype=np.float32)  # need to be normalized!
 
@@ -134,7 +134,8 @@ class OrbitCamera:
 
     @property
     def mvp(self):
-        return self.perspective @ np.linalg.inv(self.pose)  # [4, 4]
+        # return self.perspective @ np.linalg.inv(self.pose)  # [4, 4]
+        return np.linalg.inv(self.pose) @ self.perspective
 
     def orbit(self, dx, dy):
         # rotate along camera up/side axis!
@@ -152,14 +153,9 @@ class OrbitCamera:
 
 
 def main():
-    orbit = OrbitCamera(400, 400, r=2)
-    wv = torch.from_numpy(orbit.pose)
-    proj = torch.from_numpy(orbit.perspective)
-    cam = MiniCam(400, 400, 60, 60, 0.01, 100, wv, proj, 1)
-
     hand_model = ManoGaussianModel(sh_degree=1)
     print(hand_model.mano_model.faces.shape)
-    npz_path = "output/59b3d072-1/point_cloud/iteration_2/mano_param.npz"
+    npz_path = "output/b6e05868-e/point_cloud/iteration_1/mano_param.npz" # "output/59b3d072-1/point_cloud/iteration_2/mano_param.npz"
     mano_param = np.load(str(npz_path))
     mano_param = {k: torch.from_numpy(v).cuda() for k, v in mano_param.items()}
     for k, v in mano_param.items():
@@ -172,7 +168,7 @@ def main():
     )
     vertices = hand_output.vertices
     print(vertices.shape)
-    
+
     if False:
         vertices_cpu = vertices.cpu()
         fig = plt.figure()
@@ -181,14 +177,41 @@ def main():
         plt.show()
         return
 
-    renderer = NVDiffRenderer()
+    renderer = NVDiffRenderer(use_opengl=False)
     faces = torch.from_numpy(hand_model.mano_model.faces.astype(np.int32)).to(vertices.device)
-    output = renderer.render_from_camera(vertices, faces, cam, background_color=[0, 0, 0])
-    rgba_mesh = output['rgba'].squeeze(0).permute(2, 0, 1)  # (C, W, H)
-    print(rgba_mesh.shape)
-    image_data = rgba_mesh[:3].cpu().permute(1, 2, 0)
-    plt.imshow(image_data)
-    plt.show()
+
+    orbit = OrbitCamera(400, 400, r=2)
+    for i in range(10):
+        v = vertices[0, [i]]
+        print(v)
+        print(renderer.world_to_camera(v.unsqueeze(0), torch.from_numpy(orbit.pose).to(vertices.device).unsqueeze(0)))
+        # print(renderer.world_to_clip(v.unsqueeze(0), None, None, (400, 400), torch.from_numpy(orbit.view).to(vertices.device).unsqueeze(0)))
+    # return
+    # wv = torch.from_numpy(orbit.view)
+    # print(wv)
+    # print(orbit.pose)
+    # print(orbit.perspective)
+    views = []
+    for ele in range(-90, 90, 30):
+        for azi in range(-180, 180, 60):
+            view = orbit_camera(ele, azi, 2, target=[0.1, 0.1, 1], opengl=False)
+            # print(view)
+            # views.append(view)
+    views.append(orbit.pose)
+    views.append(orbit.view)
+    proj = torch.from_numpy(orbit.mvp)
+    for view in views:
+        print(view)
+        cam = MiniCam(orbit.W, orbit.H, orbit.fovy, orbit.fovx, orbit.near, orbit.far, torch.from_numpy(view), proj, 1)
+
+        output = renderer.render_from_camera(vertices, faces, cam, background_color=[0, 0, 0])
+        rgba_mesh = output['rgba'].squeeze(0)  # (C, W, H)
+        print(rgba_mesh.shape)
+        image_data = rgba_mesh[:3].cpu()
+        if torch.sum(image_data) < 1:
+            continue
+        plt.imshow(image_data)
+        plt.show()
 
 
 if __name__ == '__main__':
