@@ -1,6 +1,6 @@
 from scene import Scene, ManoGaussianModel
 from mesh_renderer import NVDiffRenderer
-from scene.cameras import MiniCam
+from scene.cameras import MiniCam, Camera
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -9,7 +9,7 @@ from PIL import Image
 import nvdiffrast.torch as dr
 import os
 import json
-from utils.graphics_utils import focal2fov
+from utils.graphics_utils import focal2fov, getProjectionMatrix, getWorld2View2
 
 
 def make_perspective(fovy, fovx, near, far):
@@ -53,21 +53,60 @@ def read_example_camera(camera_file):
             transform_mat[:3, 3] = np.matmul(-R, np.array(c['campos'])) * 0.001
             transform_mat[1, :] = -transform_mat[1, :]
             transform_mat[2, :] = -transform_mat[2, :]
+            R = transform_mat[:3, :3].transpose()
+            T = transform_mat[:3, 3]
             a_mvp = np.matmul(proj, transform_mat).astype(np.float32)
             supplied_mv = transform_mat
-            supplied_mv = supplied_mv.T
-            supplied_mv[:, 1] = -supplied_mv[:, 1]
-            supplied_mv[:, 2] = -supplied_mv[:, 2]
+            #supplied_mv = supplied_mv.T
+            #supplied_mv[:, 1] = -supplied_mv[:, 1]
+            #supplied_mv[:, 2] = -supplied_mv[:, 2]
             supplied_mvp = a_mvp
-            supplied_mvp = supplied_mvp.T
-            supplied_mvp[:, 1] = -supplied_mvp[:, 1]
+            #supplied_mvp = supplied_mvp.T
+            #supplied_mvp[:, 1] = -supplied_mvp[:, 1]
 
             cam_id = c['id']
-            camera_infos[cam_id] = {'R': R, 'T': transform_mat[:3, 3], 'focal': focal,
+            camera_infos[cam_id] = {'R': R, 'T': T, 'focal': focal,
                                     'w': w, 'h': h, 'fovx': fovx, 'fovy': fovy,
                                     'mv': supplied_mv, 'mvp': supplied_mvp,
                                     'near': near, 'far': far}
     return camera_infos
+
+
+def cam_info_to_minicam(expected_info):
+    # in remote_viewer
+    # view_matrix: world_view_transform.T
+    # view_projection_matrix: full_proj_transform.T
+    # in network_gui
+    # world_view_transform flip 1, 2
+    # full_proj_transform flip 1
+    # world_view_transform = getWorld2view2(R, T).transpose(0, 1) <- transform_mat.T
+    # projection_matrix = getProjectionMatrix(...).transpose(0, 1)
+    # full_proj_transform = world * matrix <- a_mvp.T
+    # their projection matrix also has a flip sign
+    # unless reshape transpose it again - test?
+
+    # cam_info = Camera(colmap_id=1, R=expected_info['R'], T=expected_info['T'],
+    #                   FoVx=expected_info['fovx'], FoVy=expected_info['fovy'],
+    #                   image_width=expected_info['w'], image_height=expected_info['h'],
+    #                   bg=[1, 1, 1], image=np.ones(334, 512, 3), image_path="",
+    #                   image_name="", uid=1, timestep=1, data_device='cuda')
+
+    expected_mvp = expected_info['mvp']
+    expected_transform = torch.from_numpy(np.array(expected_info['mv']))
+    calculated_transform = getWorld2View2(np.array(expected_info['R']), np.array(expected_info['T']))
+    print(expected_transform)
+    print(calculated_transform)
+    center = expected_transform.transpose(0, 1).inverse()[3, :3]
+    print(center)
+    other_proj = getProjectionMatrix(expected_info['near'], expected_info['far'],
+                                     expected_info['fovx'], expected_info['fovy']).double()
+    print(other_proj.shape)
+    calculated_mvp = (expected_transform.transpose(0, 1).unsqueeze(0).bmm(other_proj.transpose(0, 1).unsqueeze(0))).squeeze(0)
+    print(calculated_mvp)
+    print(expected_mvp)
+    calculated_flatten = calculated_mvp.T.flatten().tolist()
+    received = torch.reshape(torch.tensor(calculated_flatten), (4, 4))
+    print(received)
 
 
 # we want to retrieve the camera in COLMAP convention (y down, z in, x right?)
@@ -106,6 +145,8 @@ def main():
     faces = torch.from_numpy(hand_model.mano_model.faces.astype(np.int32)).to(vertices.device)
     infos = read_example_camera("test_cam_try.json")
     for k, v in infos.items():
+        cam_info_to_minicam(v)
+        exit(0)
         print(f"{k}")
         test_cam = infos[k]
         cam = MiniCam(test_cam['w'], test_cam['h'], test_cam['fovy'], test_cam['fovx'],

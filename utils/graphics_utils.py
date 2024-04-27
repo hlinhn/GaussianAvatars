@@ -3,7 +3,7 @@
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
 # All rights reserved.
 #
-# This software is free for non-commercial, research and evaluation use 
+# This software is free for non-commercial, research and evaluation use
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
@@ -59,7 +59,7 @@ def getProjectionMatrix(znear, zfar, fovX, fovY):
 
     P = torch.zeros(4, 4)
 
-    z_sign = 1.0
+    z_sign = -1.0
 
     P[0, 0] = 2.0 * znear / (right - left)
     P[1, 1] = 2.0 * znear / (top - bottom)
@@ -77,13 +77,13 @@ def focal2fov(focal, pixels):
     return 2*math.atan(pixels/(2*focal))
 
 
-# Copyright (c) 2020-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved. 
+# Copyright (c) 2020-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 # property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction, 
-# disclosure or distribution of this material and related documentation 
-# without an express license agreement from NVIDIA CORPORATION or 
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
 

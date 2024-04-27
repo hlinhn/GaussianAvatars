@@ -3,7 +3,7 @@
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
 # All rights reserved.
 #
-# This software is free for non-commercial, research and evaluation use 
+# This software is free for non-commercial, research and evaluation use
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
@@ -127,7 +127,7 @@ def storePly(path, xyz, rgb):
     dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
             ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
             ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')]
-    
+
     normals = np.zeros_like(xyz)
 
     elements = np.empty(xyz.shape[0], dtype=dtype)
@@ -215,7 +215,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
             image_path = os.path.join(path, cam_name)
             image_name = Path(cam_name).stem
-            
+
             if 'w' in frame and 'h' in frame:
                 image = None
                 width = frame['w']
@@ -236,11 +236,11 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
             timestep = frame["timestep_index"] if 'timestep_index' in frame else None
             camera_id = frame["camera_index"] if 'camera_id' in frame else None
-            
+
             cam_infos.append(CameraInfo(
-                uid=idx, R=R, T=T, FovY=fovy, FovX=fovx, bg=bg, image=image, 
-                image_path=image_path, image_name=image_name, 
-                width=width, height=height, 
+                uid=idx, R=R, T=T, FovY=fovy, FovX=fovx, bg=bg, image=image,
+                image_path=image_path, image_name=image_name,
+                width=width, height=height,
                 timestep=timestep, camera_id=camera_id))
     return cam_infos
 
@@ -249,7 +249,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
     print("Reading Test Transforms")
     test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
-    
+
     if not eval:
         train_cam_infos.extend(test_cam_infos)
         test_cam_infos = []
@@ -261,7 +261,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
         # Since this data set has no colmap data, we start with random points
         num_pts = 100_000
         print(f"Generating random point cloud ({num_pts})...")
-        
+
         # We create random points inside the bounds of the synthetic Blender scenes
         xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
         shs = np.random.random((num_pts, 3)) / 255.0
@@ -297,9 +297,9 @@ def readManoMeshes(path, mesh_file):
 
 
 def readManoCameras(path, mesh_file, camera_file, white_background=False):
-    # source_folder = "/home/halinh/external_data/InterHand2.6M_30fps_batch1/images/test/Capture0/ROM03_LT_No_Occlusion/"
-    source_folder = os.path.join(f"{os.getcwd()}", "..", "..", "gaussian_test", 
-                                 "ROM03_LT_No_Occlusion")
+    source_folder = "/home/linh/new_data/InterHand/InterHand2.6M_30fps_batch1/images/test/Capture0/ROM03_LT_No_Occlusion/"
+    # source_folder = os.path.join(f"{os.getcwd()}", "..", "..", "gaussian_test",
+    #                              "ROM03_LT_No_Occlusion")
     idx_to_image = {}
     camera_infos = {}
     with open(os.path.join(path, mesh_file)) as json_file:
@@ -313,11 +313,17 @@ def readManoCameras(path, mesh_file, camera_file, white_background=False):
         for c in cameras:
             transform_mat = np.eye(4)
             transform_mat[:3, :3] = np.array(c['camrot'])
-            transform_mat[:3, 3] = np.array(c['campos'])
-            transform_mat[:3, 1:3] *= -1
-            w2c = np.linalg.inv(transform_mat)
-            R = np.transpose(w2c[:3, :3])
-            T = w2c[:3, 3] # np.matmul(-R.transpose(), np.array(c['campos']))
+            R = transform_mat[:3, :3]
+            transform_mat[:3, 3] = np.matmul(-R, np.array(c['campos'])) * 0.001
+            transform_mat[1, :] = -transform_mat[1, :]
+            transform_mat[2, :] = -transform_mat[2, :]
+            R = transform_mat[:3, :3].transpose()
+            T = transform_mat[:3, 3]
+            # transform_mat[:3, 3] = np.array(c['campos'])
+            # transform_mat[:3, 1:3] *= -1
+            # w2c = np.linalg.inv(transform_mat)
+            # R = np.transpose(w2c[:3, :3])
+            # T = w2c[:3, 3] # np.matmul(-R.transpose(), np.array(c['campos']))
             focal = np.array(c['focal'])
             cam_id = c['id']
             camera_infos[cam_id] = {'R': R, 'T': T, 'focal': focal}
@@ -340,9 +346,9 @@ def readManoCameras(path, mesh_file, camera_file, white_background=False):
             fovy = focal2fov(focal_c[1], height)
             fovx = focal2fov(focal_c[0], width)
             cam_infos.append(CameraInfo(
-                uid=total_idx, R=camera_infos[c]['R'], T=camera_infos[c]['T'], 
-                FovY=fovy, FovX=fovx, bg=bg, image=image, 
-                image_path=image_path, image_name=image_name, 
+                uid=total_idx, R=camera_infos[c]['R'], T=camera_infos[c]['T'],
+                FovY=fovy, FovX=fovx, bg=bg, image=image,
+                image_path=image_path, image_name=image_name,
                 width=width, height=height,
                 timestep=m, camera_id=c))
             total_idx += 1
@@ -353,7 +359,7 @@ def readMeshesFromTransforms(path, transformsfile):
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
         frames = contents["frames"]
-        
+
         mesh_infos = {}
         for idx, frame in tqdm(enumerate(frames), total=len(frames)):
             if not 'timestep_index' in frame or frame["timestep_index"] in mesh_infos:
@@ -369,7 +375,7 @@ def readDynamicNerfInfo(path, white_background, eval, extension=".png", target_p
         train_cam_infos = readCamerasFromTransforms(target_path, "transforms_train.json", white_background, extension)
     else:
         train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
-    
+
     print("Reading Training Meshes")
     train_mesh_infos = readMeshesFromTransforms(path, "transforms_train.json")
     if target_path != "":
@@ -377,19 +383,19 @@ def readDynamicNerfInfo(path, white_background, eval, extension=".png", target_p
         tgt_train_mesh_infos = readMeshesFromTransforms(target_path, "transforms_train.json")
     else:
         tgt_train_mesh_infos = {}
-    
+
     print("Reading Validation Transforms")
     if target_path != "":
         val_cam_infos = readCamerasFromTransforms(target_path, "transforms_val.json", white_background, extension)
     else:
         val_cam_infos = readCamerasFromTransforms(path, "transforms_val.json", white_background, extension)
-    
+
     print("Reading Test Transforms")
     if target_path != "":
         test_cam_infos = readCamerasFromTransforms(target_path, "transforms_test.json", white_background, extension)
     else:
         test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
-    
+
     print("Reading Test Meshes")
     test_mesh_infos = readMeshesFromTransforms(path, "transforms_test.json")
     if target_path != "":
@@ -397,7 +403,7 @@ def readDynamicNerfInfo(path, white_background, eval, extension=".png", target_p
         tgt_test_mesh_infos = readMeshesFromTransforms(target_path, "transforms_test.json")
     else:
         tgt_test_mesh_infos = {}
-    
+
     if target_path != "" or not eval:
         train_cam_infos.extend(val_cam_infos)
         val_cam_infos = []
@@ -430,7 +436,7 @@ def readManoInfo(path, white_background, eval, extension=".jpg", target_path="")
         train_cam_infos = readManoCameras(target_path, mesh_file, train_cam, white_background)
     else:
         train_cam_infos = readManoCameras(path, mesh_file, train_cam, white_background)
-    print(len(train_cam_infos))    
+    print(len(train_cam_infos))
     print("Reading Training Meshes")
     train_mesh_infos = readManoMeshes(path, mesh_file)
     if target_path != "":
@@ -438,14 +444,14 @@ def readManoInfo(path, white_background, eval, extension=".jpg", target_path="")
         tgt_train_mesh_infos = readManoMeshes(target_path, mesh_file)
     else:
         tgt_train_mesh_infos = {}
-    
+
     print("Reading Validation Transforms")
     if target_path != "":
         val_cam_infos = readManoCameras(target_path, mesh_file, val_cam, white_background)
     else:
         val_cam_infos = readManoCameras(path, mesh_file, val_cam, white_background)
     print(len(val_cam_infos))
-    
+
     print("Reading Test Transforms")
     if target_path != "":
         test_cam_infos = readManoCameras(target_path, mesh_file, test_cam, white_background)
@@ -460,7 +466,7 @@ def readManoInfo(path, white_background, eval, extension=".jpg", target_path="")
         tgt_test_mesh_infos = readManoMeshes(target_path, mesh_file)
     else:
         tgt_test_mesh_infos = {}
-    
+
     if target_path != "" or not eval:
         train_cam_infos.extend(val_cam_infos)
         # val_cam_infos = []
@@ -476,7 +482,7 @@ def readManoInfo(path, white_background, eval, extension=".jpg", target_path="")
         # Since this data set has no colmap data, we start with random points
         num_pts = 1538 #100_000
         print(f"Generating random point cloud ({num_pts})...")
-        
+
         # We create random points inside the bounds of the synthetic Blender scenes
         xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
         shs = np.random.random((num_pts, 3)) / 255.0
