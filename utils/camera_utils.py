@@ -39,7 +39,7 @@ def loadCam(args, id, cam_info, resolution_scale):
         scale = float(global_down) * float(resolution_scale)
         image_width, image_height = (int(orig_w / scale), int(orig_h / scale))
 
-    return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
+    init_cam = Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
                   image_width=image_width, image_height=image_height,
                   bg=cam_info.bg, 
@@ -47,6 +47,10 @@ def loadCam(args, id, cam_info, resolution_scale):
                   image_path=cam_info.image_path,
                   image_name=cam_info.image_name, uid=id, 
                   timestep=cam_info.timestep, data_device=args.data_device)
+    init_cam.world_view_transform[:, 1] = -init_cam.world_view_transform[:, 1]
+    init_cam.world_view_transform[:, 2] = -init_cam.world_view_transform[:, 2]
+    init_cam.full_proj_transform[:, 1] = -init_cam.full_proj_transform[:, 1]
+    return init_cam
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):
     camera_list = []
