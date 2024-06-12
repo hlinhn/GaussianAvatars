@@ -16,6 +16,8 @@ from .gaussian_model import GaussianModel
 from utils.graphics_utils import compute_face_orientation
 # from pytorch3d.transforms import matrix_to_quaternion
 from roma import rotmat_to_unitquat, quat_xyzw_to_wxyz
+from pytorch3d.ops import SubdivideMeshes
+from pytorch3d.structures import Meshes
 
 
 class ManoGaussianModel(GaussianModel):
@@ -25,13 +27,25 @@ class ManoGaussianModel(GaussianModel):
         self.mano_model = MANO(
             is_rhand=is_rhand
         ).cuda()
+        if not is_rhand:
+            self.mano_model.shapedirs[:,0,:] *= -1
         self.mano_param = None
         self.mano_param_orig = None
 
+        example_mano = self.mano_model(
+            torch.zeros([1, 10]).cuda(),
+            torch.zeros([1, 3]).cuda(),
+            torch.zeros([1, 45]).cuda(),
+            torch.zeros([1, 3]).cuda())
+        example_mano_mesh = Meshes(example_mano.vertices, self.mano_model.faces_tensor.repeat(1, 1, 1))
+        self.mesh_divider = SubdivideMeshes(example_mano_mesh)
+        print(self.mano_model.faces_tensor.shape)
+        print(self.mesh_divider._subdivided_faces.shape)
+
         # binding is initialized once the mesh topology is known
         if self.binding is None:
-            self.binding = torch.arange(len(self.mano_model.faces_tensor)).cuda()
-            self.binding_counter = torch.ones(len(self.mano_model.faces_tensor), dtype=torch.int32).cuda()
+            self.binding = torch.arange(len(self.mesh_divider._subdivided_faces)).cuda()
+            self.binding_counter = torch.ones(len(self.mesh_divider._subdivided_faces), dtype=torch.int32).cuda()
 
     def load_meshes(self, train_meshes, test_meshes, tgt_train_meshes, tgt_test_meshes):
         if self.mano_param is None:
@@ -40,7 +54,7 @@ class ManoGaussianModel(GaussianModel):
             pose_meshes = meshes if len(tgt_meshes) == 0 else tgt_meshes
             
             self.num_timesteps = max(pose_meshes) + 1  # required by viewers
-            num_verts = self.mano_model.v_template.shape[0]
+            # num_verts = self.mano_model.v_template.shape[0]
 
             T = self.num_timesteps
 
@@ -77,9 +91,10 @@ class ManoGaussianModel(GaussianModel):
             mano_param['hand_pose'].cuda(),
             mano_param['transl'].cuda()
         )
-        verts = mano_output.vertices
+        subdivided_mesh = self.mesh_divider(Meshes(mano_output.vertices, self.mano_model.faces_tensor.repeat(1, 1, 1)))
+        # verts = mano_output.vertices
         verts_cano = mano_output.v_shaped
-        self.update_mesh_properties(verts, verts_cano)
+        self.update_mesh_properties(subdivided_mesh.verts_padded(), verts_cano)
 
     def select_mesh_by_timestep(self, timestep, original=False):
         self.timestep = timestep
@@ -91,7 +106,8 @@ class ManoGaussianModel(GaussianModel):
             mano_param['hand_pose'][[timestep]].cuda(),
             mano_param['transl'][[timestep]].cuda()
         )
-        verts = mano_output.vertices
+        subdivided_mesh = self.mesh_divider(Meshes(mano_output.vertices, self.mano_model.faces_tensor.repeat(1, 1, 1)))
+        verts = subdivided_mesh.verts_padded() # mano_output.vertices
         verts_cano = mano_output.v_shaped
         self.update_mesh_properties(verts, verts_cano)
     
@@ -146,7 +162,7 @@ class ManoGaussianModel(GaussianModel):
         # self.optimizer.add_param_group(param_shape)
 
         # pose
-        train_param = False
+        train_param = True
         self.mano_param['global_orient'].requires_grad = train_param
         self.mano_param['hand_pose'].requires_grad = train_param
         params = [

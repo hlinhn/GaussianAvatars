@@ -50,6 +50,8 @@ class ModelParams(ParamGroup):
         self._source_path = ""  # Path to the source data set
         self._target_path = ""  # Path to the target data set for pose and expression transfer
         self._model_path = ""  # Path to the folder to save trained models
+        self.pose_file = "mano_frames_1fps_10.json"
+        self.sequence = "ROM03_LT_No_Occlusion"
         self._images = "images"
         self._resolution = -1
         self._white_background = False
@@ -77,19 +79,19 @@ class PipelineParams(ParamGroup):
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
         # 3D Gaussians
-        self.iterations = 100 #600_000  # 30_000 (original)
+        self.iterations = 60_000 #600_000  # 30_000 (original)
         self.position_lr_init = 0.005  # (scaled up according to mean triangle scale)  #0.00016 (original)
         self.position_lr_final = 0.00005  # (scaled up according to mean triangle scale) # 0.0000016 (original)
         self.position_lr_delay_mult = 0.01
-        self.position_lr_max_steps = 600_000  # 30_000 (original)
+        self.position_lr_max_steps = 60_000  # 30_000 (original)
         self.feature_lr = 0.0025
         self.opacity_lr = 0.05
         self.scaling_lr = 0.017  # (scaled up according to mean triangle scale)  # 0.005 (original)
         self.rotation_lr = 0.001
-        self.densification_interval = 2_000  # 100 (original)
-        self.opacity_reset_interval = 60_000 # 3000 (original)
-        self.densify_from_iter = 10_000  # 500 (original)
-        self.densify_until_iter = 600_000  # 15_000 (original)
+        self.densification_interval = 1_000  # 100 (original)
+        self.opacity_reset_interval = 30_000 # 3000 (original)
+        self.densify_from_iter = 5000  # 500 (original)
+        self.densify_until_iter = 60_000  # 15_000 (original)
         self.densify_grad_threshold = 0.0002
         
         # GaussianAvatars
@@ -107,6 +109,7 @@ class OptimizationParams(ParamGroup):
         self.lambda_dynamic_offset = 0.
         self.lambda_laplacian = 0.
         self.lambda_dynamic_offset_std = 0  #1.
+        self.flat_scale = 0.
 
         super().__init__(parser, "Optimization Parameters")
 

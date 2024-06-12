@@ -32,6 +32,18 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 
+
+def test_radii(points, viewmatrix, projmatrix):
+    import numpy as np
+    for p in points:
+        p = torch.cat((p, torch.tensor([1.0]).to(p.device)), dim=-1)
+        proj = torch.matmul(p, projmatrix)
+        pw = 1.0 / (proj[-1] + 1e-9)
+        p_proj = torch.tensor([proj[0] * pw, proj[1] * pw, proj[2] * pw, 1]).to(p.device)
+        p_view = torch.matmul(p_proj, viewmatrix)
+        print(p_view)
+
+
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -43,6 +55,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
+    # exit(0)
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
@@ -68,7 +81,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 net_image = None
                 # custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer, use_original_mesh = network_gui.receive()
                 custom_cam, msg = network_gui.receive()
-
+                print(custom_cam.full_proj_transform)
+                print(custom_cam.world_view_transform)
                 # render
                 if custom_cam != None:
                     # mesh selection by timestep
@@ -122,9 +136,18 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
+        # print(viewpoint_cam.image_path)
+        # print(viewpoint_cam.full_proj_transform)
+        # print(viewpoint_cam.world_view_transform)
+        # viewpoint_cam.full_proj_transform[:, 1] = -viewpoint_cam.full_proj_transform[:, 1]
+        # viewpoint_cam.world_view_transform[:, 1] = -viewpoint_cam.world_view_transform[:, 1]        
+        # viewpoint_cam.world_view_transform[:, 2] = -viewpoint_cam.world_view_transform[:, 2]        
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-
+        # print(gaussians._xyz)
+        # print(visibility_filter)
+        # print(torch.sum(visibility_filter))
+        # test_radii(gaussians._xyz[:10], viewpoint_cam.world_view_transform.cuda(), viewpoint_cam.full_proj_transform.cuda())
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
 
@@ -146,6 +169,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     # losses['scale'] = F.relu(gaussians._scaling).norm(dim=1).mean() * opt.lambda_scale
                     losses['scale'] = F.relu(torch.exp(gaussians._scaling[visibility_filter]) - opt.threshold_scale).norm(dim=1).mean() * opt.lambda_scale
 
+            if opt.flat_scale != 0:
+                if opt.metric_scale:
+                    losses['flat_scale'] = torch.sum(torch.min(gaussians.get_scaling[visibility_filter], 1)[0]) * opt.flat_scale
+                else:
+                    # losses['scale'] = F.relu(gaussians._scaling).norm(dim=1).mean() * opt.lambda_scale
+                    losses['flat_scale'] = torch.sum(torch.min(torch.exp(gaussians._scaling[visibility_filter]), 1)[0]) * opt.flat_scale
+
             if opt.lambda_dynamic_offset != 0:
                 losses['dy_off'] = gaussians.compute_dynamic_offset_loss() * opt.lambda_dynamic_offset
 
@@ -160,8 +190,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
             if opt.lambda_laplacian != 0:
                 losses['lap'] = gaussians.compute_laplacian_loss() * opt.lambda_laplacian
-        
+        # print(losses)
         losses['total'] = sum([v for k, v in losses.items()])
+        if torch.isnan(losses['total']):
+            exit(1)
         losses['total'].backward()
 
         iter_end.record()
@@ -341,7 +373,7 @@ if __name__ == "__main__":
         args.checkpoint_iterations.extend(list(range(args.interval, args.iterations+1, args.interval)))
     
     print("Optimizing " + args.model_path)
-
+    print(f"Pose file: {args.pose_file}")
     # Initialize system state (RNG)
     safe_state(args.quiet)
 

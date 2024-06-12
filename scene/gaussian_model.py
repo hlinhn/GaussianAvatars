@@ -171,7 +171,7 @@ class GaussianModel:
 
     def create_from_pcd(self, pcd : Optional[BasicPointCloud], spatial_lr_scale : float):
         self.spatial_lr_scale = spatial_lr_scale
-        if pcd == None:
+        if pcd is None:
             assert self.binding is not None
             num_pts = self.binding.shape[0]
             fused_point_cloud = torch.zeros((num_pts, 3)).float().cuda()
@@ -191,7 +191,8 @@ class GaussianModel:
             dist2 = torch.clamp_min(distCUDA2(self.get_xyz), 0.0000001)
             scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
         else:
-            scales = torch.log(torch.ones((self.get_xyz.shape[0], 3), device="cuda"))
+            # scales = torch.zeros((self.get_xyz.shape[0], 3), device="cuda")
+            scales = torch.log(torch.ones((self.get_xyz.shape[0], 3), devices="cuda"))
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
         rots[:, 0] = 1
 

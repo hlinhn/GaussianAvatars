@@ -43,10 +43,12 @@ class CameraDataset(torch.utils.data.Dataset):
 
             if camera.image is None:
                 image = Image.open(camera.image_path)
+                mask = Image.open(camera.mask_path)
             else:
                 image = camera.image
 
             im_data = np.array(image.convert("RGBA"))
+            im_data[:, :, 3:4] = np.array(mask)[:, :, [0]]
             norm_data = im_data / 255.0
             arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + camera.bg * (1 - norm_data[:, :, 3:4])
             image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
@@ -95,7 +97,9 @@ class Scene:
             scene_info = sceneLoadTypeCallbacks["DynamicNerf"](args.source_path, args.white_background, args.eval, target_path=args.target_path)
         elif os.path.exists(os.path.join(args.source_path, "mano_frames_try.json")):
             print("Mano dataset")
-            scene_info = sceneLoadTypeCallbacks["Mano"](args.source_path, args.white_background, args.eval, target_path=args.target_path)
+            print(args.target_path)
+            scene_info = sceneLoadTypeCallbacks["Mano"](args.source_path, args.white_background, args.eval, target_path=args.target_path,
+                                                        pose_file=args.pose_file, sequence=args.sequence)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")
             scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval)

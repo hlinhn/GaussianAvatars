@@ -45,11 +45,13 @@ def loadCam(args, id, cam_info, resolution_scale):
                   bg=cam_info.bg, 
                   image=cam_info.image, 
                   image_path=cam_info.image_path,
+                  mask_path=cam_info.mask_path,
                   image_name=cam_info.image_name, uid=id, 
-                  timestep=cam_info.timestep, data_device=args.data_device)
-    init_cam.world_view_transform[:, 1] = -init_cam.world_view_transform[:, 1]
-    init_cam.world_view_transform[:, 2] = -init_cam.world_view_transform[:, 2]
-    init_cam.full_proj_transform[:, 1] = -init_cam.full_proj_transform[:, 1]
+                  timestep=cam_info.timestep, data_device=args.data_device,
+                  principal=cam_info.principal)
+    # init_cam.world_view_transform[:, 1] = -init_cam.world_view_transform[:, 1]
+    # init_cam.world_view_transform[:, 2] = -init_cam.world_view_transform[:, 2]
+    # init_cam.full_proj_transform[:, 1] = -init_cam.full_proj_transform[:, 1]
     return init_cam
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):

@@ -59,7 +59,9 @@ def render_set(dataset : ModelParams, name, iteration, views, gaussians, pipelin
     gts_path = iter_path / "gt"
     if render_mesh:
         render_mesh_path = iter_path / "renders_mesh"
-
+    
+    render_depth_path = iter_path / "depth"
+    makedirs(render_depth_path, exist_ok=True)
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
 
@@ -70,8 +72,13 @@ def render_set(dataset : ModelParams, name, iteration, views, gaussians, pipelin
     for idx, view in enumerate(tqdm(views_loader, desc="Rendering progress")):
         if gaussians.binding != None:
             gaussians.select_mesh_by_timestep(view.timestep)
-        rendering = render(view, gaussians, pipeline, background)["render"]
+        all_data = render(view, gaussians, pipeline, background)
+        rendering = all_data["render"]
         gt = view.original_image[0:3, :, :]
+        depth_im = all_data["depth"]
+        if idx == 0:
+            print(depth_im.shape)
+        depth_im = depth_im.repeat((3, 1, 1))
         if render_mesh:
             out_dict = mesh_renderer.render_from_camera(gaussians.verts, gaussians.faces, view)
             rgba_mesh = out_dict['rgba'].squeeze(0).permute(2, 0, 1)  # (C, W, H)
@@ -83,6 +90,7 @@ def render_set(dataset : ModelParams, name, iteration, views, gaussians, pipelin
         path2data = {}
         path2data[Path(render_path) / f'{idx:05d}.png'] = rendering
         path2data[Path(gts_path) / f'{idx:05d}.png'] = gt
+        path2data[Path(render_depth_path) / f'{idx:05d}.png'] = depth_im
         if render_mesh:
             path2data[Path(render_mesh_path) / f'{idx:05d}.png'] = rendering_mesh
         worker_args.append([path2data])
@@ -108,6 +116,7 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
             gaussians = ManoGaussianModel(dataset.sh_degree)
         else:
             gaussians = GaussianModel(dataset.sh_degree)
+        
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
@@ -116,7 +125,7 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         if dataset.target_path != "":
              name = os.path.basename(os.path.normpath(dataset.target_path))
              # when loading from a target path, test cameras are merged into the train cameras
-             render_set(dataset, f'{name}', scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, render_mesh)
+             render_set(dataset, f'{name}', scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background, render_mesh)
         else:
             if not skip_train:
                 render_set(dataset, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, render_mesh)

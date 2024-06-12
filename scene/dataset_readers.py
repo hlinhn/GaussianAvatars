@@ -16,7 +16,7 @@ from typing import NamedTuple, Optional
 from tqdm import tqdm
 from scene.colmap_loader import read_extrinsics_text, read_intrinsics_text, qvec2rotmat, \
     read_extrinsics_binary, read_intrinsics_binary, read_points3D_binary, read_points3D_text
-from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
+from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal, getWorld2View3
 import numpy as np
 import json
 from pathlib import Path
@@ -32,12 +32,14 @@ class CameraInfo(NamedTuple):
     FovX: np.array
     image: Optional[np.array]
     image_path: str
+    mask_path: str
     image_name: str
     width: int
     height: int
     bg: np.array = np.array([0, 0, 0])
     timestep: Optional[int] = None
     camera_id: Optional[int] = None
+    principal: Optional[np.array] = None
 
 class SceneInfo(NamedTuple):
     train_cameras: list
@@ -63,7 +65,7 @@ def getNerfppNorm(cam_info):
     cam_centers = []
 
     for cam in cam_info:
-        W2C = getWorld2View2(cam.R, cam.T)
+        W2C = getWorld2View3(cam.R, cam.T)
         C2W = np.linalg.inv(W2C)
         cam_centers.append(C2W[:3, 3:4])
 
@@ -296,8 +298,9 @@ def readManoMeshes(path, mesh_file):
     return mesh_infos
 
 
-def readManoCameras(path, mesh_file, camera_file, white_background=False):
-    source_folder = "/home/linh/new_data/InterHand/InterHand2.6M_30fps_batch1/images/test/Capture0/ROM03_LT_No_Occlusion/"
+def readManoCameras(path, mesh_file, camera_file, sequence, white_background=False):
+    source_folder = f"/mnt/data/InterHand/InterHand2.6M_30fps_batch1/images/test/Capture0/{sequence}/"
+    mask_folder = f"/mnt/data/InterHand/InterHand2.6M_30fps_batch1/masks/test/Capture0/{sequence}/"
     # source_folder = os.path.join(f"{os.getcwd()}", "..", "..", "gaussian_test",
     #                              "ROM03_LT_No_Occlusion")
     idx_to_image = {}
@@ -311,6 +314,8 @@ def readManoCameras(path, mesh_file, camera_file, white_background=False):
         contents = json.load(camera_json)
         cameras = contents['cameras']
         for c in cameras:
+            if c == 'cam400412':
+                continue
             transform_mat = np.eye(4)
             transform_mat[:3, :3] = np.array(c['camrot'])
             R = transform_mat[:3, :3]
@@ -326,30 +331,36 @@ def readManoCameras(path, mesh_file, camera_file, white_background=False):
             # T = w2c[:3, 3] # np.matmul(-R.transpose(), np.array(c['campos']))
             focal = np.array(c['focal'])
             cam_id = c['id']
-            camera_infos[cam_id] = {'R': R, 'T': T, 'focal': focal}
+            camera_infos[cam_id] = {'R': R, 'T': T, 'focal': focal, 'princpt': np.array(c['princpt'])}
 
     cam_infos = []
     total_idx = 0
     for c in camera_infos.keys():
+        width = None
+        height = None
         for m in idx_to_image.keys():
             bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
             image_path = os.path.join(source_folder, c, f"image{idx_to_image[m]}.jpg")
+            mask_path = os.path.join(mask_folder, c, f"image{idx_to_image[m]}.jpg")
             image_name = Path(image_path).stem
-            image = Image.open(image_path)
+            if width is None:
+                image = Image.open(image_path)
             # we need the background masking for this one
-            im_data = np.array(image.convert("RGBA"))
-            norm_data = im_data / 255.0
-            arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
-            image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
-            width, height = image.size
+            # mask = Image.open(mask_path)
+            # im_data = np.array(image.convert("RGBA"))
+            # im_data[:, :, 3:4] = np.array(mask)[:, :, [0]]
+            # norm_data = im_data / 255.0
+            # arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+            # image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+                width, height = image.size
             focal_c = np.array(camera_infos[c]['focal'])
             fovy = focal2fov(focal_c[1], height)
             fovx = focal2fov(focal_c[0], width)
             cam_infos.append(CameraInfo(
                 uid=total_idx, R=camera_infos[c]['R'], T=camera_infos[c]['T'],
-                FovY=fovy, FovX=fovx, bg=bg, image=image,
+                FovY=fovy, FovX=fovx, bg=bg, image=None, mask_path=mask_path,
                 image_path=image_path, image_name=image_name,
-                width=width, height=height,
+                width=width, height=height, principal=camera_infos[c]['princpt'],
                 timestep=m, camera_id=c))
             total_idx += 1
     return cam_infos
@@ -426,19 +437,20 @@ def readDynamicNerfInfo(path, white_background, eval, extension=".png", target_p
                            tgt_test_meshes=tgt_test_mesh_infos)
     return scene_info
 
-def readManoInfo(path, white_background, eval, extension=".jpg", target_path=""):
+def readManoInfo(path, white_background, eval, extension=".jpg", target_path="", pose_file="", sequence=""):
     print("Reading Training Transforms")
-    mesh_file = "mano_frames_try.json"
-    train_cam = "train_cam_try.json"
-    val_cam = "val_cam_try.json"
-    test_cam = "test_cam_try.json"
+    mesh_file = pose_file # "mano_frames_1fps.json"
+    mesh_test = pose_file # "mano_frames_1fps_10.json"
+    train_cam = "train_cam_10.json"
+    val_cam = "val_cam_5.json"
+    test_cam = "test_cam_20.json"
     if target_path != "":
-        train_cam_infos = readManoCameras(target_path, mesh_file, train_cam, white_background)
+        train_cam_infos = readManoCameras(target_path, mesh_file, train_cam, sequence, white_background)
     else:
-        train_cam_infos = readManoCameras(path, mesh_file, train_cam, white_background)
-    print(len(train_cam_infos))
+        train_cam_infos = readManoCameras(path, mesh_test, train_cam, sequence, white_background)
+    # print(len(train_cam_infos))
     print("Reading Training Meshes")
-    train_mesh_infos = readManoMeshes(path, mesh_file)
+    train_mesh_infos = readManoMeshes(path, mesh_test)
     if target_path != "":
         print("Reading Target Meshes (Training Division)")
         tgt_train_mesh_infos = readManoMeshes(target_path, mesh_file)
@@ -447,20 +459,20 @@ def readManoInfo(path, white_background, eval, extension=".jpg", target_path="")
 
     print("Reading Validation Transforms")
     if target_path != "":
-        val_cam_infos = readManoCameras(target_path, mesh_file, val_cam, white_background)
+        val_cam_infos = readManoCameras(target_path, mesh_file, val_cam, sequence, white_background)
     else:
-        val_cam_infos = readManoCameras(path, mesh_file, val_cam, white_background)
-    print(len(val_cam_infos))
+        val_cam_infos = readManoCameras(path, mesh_test, val_cam, sequence, white_background)
+    # print(len(val_cam_infos))
 
     print("Reading Test Transforms")
     if target_path != "":
-        test_cam_infos = readManoCameras(target_path, mesh_file, test_cam, white_background)
+        test_cam_infos = readManoCameras(target_path, mesh_file, test_cam, sequence, white_background)
     else:
-        test_cam_infos = readManoCameras(path, mesh_file, test_cam, white_background)
-    print(len(test_cam_infos))
+        test_cam_infos = readManoCameras(path, mesh_test, test_cam, sequence, white_background)
+    # print(len(test_cam_infos))
 
     print("Reading Test Meshes")
-    test_mesh_infos = readManoMeshes(path, mesh_file)
+    test_mesh_infos = readManoMeshes(path, mesh_test)
     if target_path != "":
         print("Reading Target Meshes (Test Division)")
         tgt_test_mesh_infos = readManoMeshes(target_path, mesh_file)
@@ -468,9 +480,9 @@ def readManoInfo(path, white_background, eval, extension=".jpg", target_path="")
         tgt_test_mesh_infos = {}
 
     if target_path != "" or not eval:
-        train_cam_infos.extend(val_cam_infos)
+        # train_cam_infos.extend(val_cam_infos)
         # val_cam_infos = []
-        train_cam_infos.extend(test_cam_infos)
+        # train_cam_infos.extend(test_cam_infos)
         # test_cam_infos = []
         train_mesh_infos.update(test_mesh_infos)
         # test_mesh_infos = {}
@@ -480,7 +492,7 @@ def readManoInfo(path, white_background, eval, extension=".jpg", target_path="")
     ply_path = os.path.join(path, "points3d.ply")
     if not os.path.exists(ply_path):
         # Since this data set has no colmap data, we start with random points
-        num_pts = 1538 #100_000
+        num_pts = 6152 #100_000
         print(f"Generating random point cloud ({num_pts})...")
 
         # We create random points inside the bounds of the synthetic Blender scenes
