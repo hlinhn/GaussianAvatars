@@ -200,6 +200,22 @@ def cam_info_to_minicam(expected_info):
 # the same as the one in the pytorch3d version
 
 
+def convert_point_cloud(model_path):
+    import open3d as o3d
+    from scene.mano_gaussian_model import ManoGaussianModel
+    gaussians = ManoGaussianModel(sh_degree=3)
+    gaussians.load_ply(os.path.join(model_path,
+                            "point_cloud",
+                            "iteration_" + str(60000),
+                            "point_cloud.ply"),
+                       has_target=False)
+    actual_cloud = gaussians.get_xyz.cpu().detach().numpy()
+    print(actual_cloud.shape)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(actual_cloud)
+    o3d.io.write_point_cloud(os.path.join(model_path, "actual_cloud.ply"), pcd, write_ascii=True)
+
+
 def readManoMeshes(mesh_file):
     with open(mesh_file) as json_file:
         contents = json.load(json_file)
@@ -213,21 +229,6 @@ def readManoMeshes(mesh_file):
                 params_np[k] = torch.from_numpy(np.asarray(v)).float().to('cuda')
             mesh_infos[frame_idx] = params_np
     return mesh_infos
-
-
-def convert_point_cloud(model_path):
-    import open3d as o3d
-    gaussians = ManoGaussianModel(sh_degree=3)
-    gaussians.load_ply(os.path.join(model_path,
-                            "point_cloud",
-                            "iteration_" + str(120000),
-                            "point_cloud.ply"),
-                       has_target=False)
-    actual_cloud = gaussians.get_xyz.cpu().detach().numpy()
-    print(actual_cloud.shape)
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(actual_cloud)
-    o3d.io.write_point_cloud(os.path.join(model_path, "actual_cloud.ply"), pcd, write_ascii=True)
 
 
 def semantic_segmentation(image_list, camera_list, sequence, k):
@@ -360,7 +361,10 @@ if __name__ == '__main__':
     parser.add_argument('--target', type=str, default='test_cam_20.json')
     parser.add_argument('--image_list', type=str, default='mano_frames_1fps.json')
     parser.add_argument('--cam', type=str, default='')
+    parser.add_argument('--filepath', type=str, default='')
     args = parser.parse_args()
 
     if args.action == 'mask':
         make_masks(args.image_list, args.target, args.sequence, args.cam)
+    elif args.action == 'cloud':
+        convert_point_cloud(args.filepath)
