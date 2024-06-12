@@ -145,7 +145,7 @@ class GaussianModel:
             # Toyota Motor Europe NV/SA and its affiliated companies retain all intellectual property and proprietary rights in and to the following code lines and related documentation. Any commercial use, reproduction, disclosure or distribution of these code lines and related documentation without an express license agreement from Toyota Motor Europe NV/SA is strictly prohibited.
             if self.face_center is None:
                 self.select_mesh_by_timestep(0)
-            
+            # print(self._xyz.shape)            
             xyz = torch.bmm(self.face_orien_mat[self.binding], self._xyz[..., None]).squeeze(-1)
             return xyz * self.face_scaling[self.binding] + self.face_center[self.binding]
 
@@ -185,14 +185,15 @@ class GaussianModel:
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
         self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
         self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
-        print("Number of points at initialisation: ", self.get_xyz.shape[0])
+        npts = self.get_xyz.shape[0]
+        print("Number of points at initialisation: ", npts)
 
         if self.binding is None:
             dist2 = torch.clamp_min(distCUDA2(self.get_xyz), 0.0000001)
             scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
         else:
             # scales = torch.zeros((self.get_xyz.shape[0], 3), device="cuda")
-            scales = torch.log(torch.ones((self.get_xyz.shape[0], 3), devices="cuda"))
+            scales = torch.log(torch.ones((npts, 3), device="cuda"))
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
         rots[:, 0] = 1
 

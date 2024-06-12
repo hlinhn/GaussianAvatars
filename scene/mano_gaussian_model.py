@@ -39,13 +39,14 @@ class ManoGaussianModel(GaussianModel):
             torch.zeros([1, 3]).cuda())
         example_mano_mesh = Meshes(example_mano.vertices, self.mano_model.faces_tensor.repeat(1, 1, 1))
         self.mesh_divider = SubdivideMeshes(example_mano_mesh)
-        print(self.mano_model.faces_tensor.shape)
-        print(self.mesh_divider._subdivided_faces.shape)
-
+        # print(self.mano_model.faces_tensor.shape)
+        # print(self.mesh_divider._subdivided_faces.shape)
+        # self.mesh_divider = self.mano_model.faces_tensor
         # binding is initialized once the mesh topology is known
+        number_of_faces = len(self.mesh_divider._subdivided_faces)
         if self.binding is None:
-            self.binding = torch.arange(len(self.mesh_divider._subdivided_faces)).cuda()
-            self.binding_counter = torch.ones(len(self.mesh_divider._subdivided_faces), dtype=torch.int32).cuda()
+            self.binding = torch.arange(number_of_faces).cuda()
+            self.binding_counter = torch.ones(number_of_faces, dtype=torch.int32).cuda()
 
     def load_meshes(self, train_meshes, test_meshes, tgt_train_meshes, tgt_test_meshes):
         if self.mano_param is None:
@@ -93,8 +94,11 @@ class ManoGaussianModel(GaussianModel):
         )
         subdivided_mesh = self.mesh_divider(Meshes(mano_output.vertices, self.mano_model.faces_tensor.repeat(1, 1, 1)))
         # verts = mano_output.vertices
+        # print(mano_output.vertices.shape)
+        verts = subdivided_mesh.verts_padded()
+        # print(verts.shape)
         verts_cano = mano_output.v_shaped
-        self.update_mesh_properties(subdivided_mesh.verts_padded(), verts_cano)
+        self.update_mesh_properties(verts, verts_cano)
 
     def select_mesh_by_timestep(self, timestep, original=False):
         self.timestep = timestep
@@ -108,12 +112,13 @@ class ManoGaussianModel(GaussianModel):
         )
         subdivided_mesh = self.mesh_divider(Meshes(mano_output.vertices, self.mano_model.faces_tensor.repeat(1, 1, 1)))
         verts = subdivided_mesh.verts_padded() # mano_output.vertices
+        # verts = mano_output.vertices
         verts_cano = mano_output.v_shaped
         self.update_mesh_properties(verts, verts_cano)
     
     def update_mesh_properties(self, verts, verts_cano):
         # need to check the dimension here
-        faces = self.mano_model.faces_tensor
+        faces = self.mesh_divider._subdivided_faces # self.mano_model.faces_tensor
         triangles = verts[:, faces]
         # position
         self.face_center = triangles.mean(dim=-2).squeeze(0)
